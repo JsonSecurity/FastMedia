@@ -1,0 +1,9 @@
+{
+  "puerto": 80,
+  "videos_por_pagina": 20,
+  "carpetas_de_videos": [
+    "/home/kali/Desktop/videos",
+    "/home/kali/Desktop/otra_carpeta_externa",
+    "/mnt/disco_externo/peliculas"
+  ]
+}
