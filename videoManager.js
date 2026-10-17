@@ -92,9 +92,10 @@ function hacerStreaming(config, rutaVirtual, req, res) {
     if (range) {
         const parts = range.replace(/bytes=/, "").split("-");
         const start = parseInt(parts[0], 10);
-        // Ya NO limitamos a 1MB. Si el navegador no especifica fin, enviamos hasta el final.
-        // Esto reduce drásticamente las peticiones HTTP y acelera la carga en Wi-Fi.
-        const end = parts[1] ? parseInt(parts[1], 10) : fileSize - 1;
+        
+        // 3MB es el punto dulce para dispositivos móviles por Wi-Fi
+        const CHUNK_SIZE = 3 * 1024 * 1024; 
+        const end = parts[1] ? parseInt(parts[1], 10) : Math.min(start + CHUNK_SIZE, fileSize - 1);
         const contentLength = (end - start) + 1;
         
         res.writeHead(206, {
@@ -103,11 +104,34 @@ function hacerStreaming(config, rutaVirtual, req, res) {
             'Content-Length': contentLength,
             'Content-Type': 'video/mp4',
         });
-        // fs.createReadStream ya gestiona la RAM en fragmentos de 64kb internamente. Es seguro.
-        fs.createReadStream(videoPath, { start, end }).pipe(res);
+        
+        // highWaterMark: Lee de a 1MB del almacenamiento del celular, sin estresar el hardware
+        const stream = fs.createReadStream(videoPath, { 
+            start, 
+            end, 
+            highWaterMark: 1024 * 1024 
+        });
+        
+        stream.pipe(res);
+
+        // ¡EL TRUCO SALVAVIDAS! Si el usuario adelanta el video, la tablet corta la conexión.
+        // Aquí matamos el stream para que el teléfono deje de leer el disco inútilmente.
+        req.on('close', () => {
+            if (!stream.destroyed) {
+                stream.destroy();
+            }
+        });
+
     } else {
         res.writeHead(200, { 'Content-Length': fileSize, 'Content-Type': 'video/mp4' });
-        fs.createReadStream(videoPath).pipe(res);
+        const stream = fs.createReadStream(videoPath, { highWaterMark: 1024 * 1024 });
+        stream.pipe(res);
+
+        req.on('close', () => {
+            if (!stream.destroyed) {
+                stream.destroy();
+            }
+        });
     }
 }
 
