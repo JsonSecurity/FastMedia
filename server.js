@@ -8,10 +8,7 @@ const PORT = config.puerto || 8000;
 const HOST = '0.0.0.0';
 const ITEMS_PER_PAGE = config.videos_por_pagina || 20;
 
-videoManager.escanearVideos(config);
-
 http.createServer((req, res) => {
-    // Solución al warning: usando la nueva API URL estándar
     const parsedUrl = new URL(req.url, `http://${req.headers.host}`);
     const pathname = parsedUrl.pathname;
 
@@ -22,22 +19,23 @@ http.createServer((req, res) => {
             fs.createReadStream(htmlPath).pipe(res);
         } else {
             res.writeHead(404);
-            res.end('Falta el archivo public/index.html');
+            res.end('Error: Falta crear la carpeta "public" y el archivo "index.html"');
         }
         return;
     }
 
-    if (pathname === '/api/videos') {
+    if (pathname === '/api/explorar') {
+        const ruta = parsedUrl.searchParams.get('dir') || "";
         const pagina = parseInt(parsedUrl.searchParams.get('page')) || 1;
-        const videos = videoManager.obtenerPagina(pagina, ITEMS_PER_PAGE);
+        const items = videoManager.explorarDirectorio(config, ruta, pagina, ITEMS_PER_PAGE);
         res.writeHead(200, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify({ videos }));
+        res.end(JSON.stringify({ items }));
         return;
     }
 
     if (pathname === '/stream') {
-        const videoId = parseInt(parsedUrl.searchParams.get('id'));
-        videoManager.hacerStreaming(videoId, req, res);
+        const rutaVirtual = parsedUrl.searchParams.get('video');
+        videoManager.hacerStreaming(config, rutaVirtual, req, res);
         return;
     }
 
@@ -45,5 +43,5 @@ http.createServer((req, res) => {
     res.end();
 
 }).listen(PORT, HOST, () => {
-    console.log(`Servidor activo en http://${HOST}:${PORT}`);
+    console.log(`[+] FastMedia Gallery en ejecución: http://${HOST}:${PORT}`);
 });

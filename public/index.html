@@ -3,120 +3,221 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>FastMedia</title>
+    <title>FastMedia Local</title>
     <style>
-        * { box-sizing: border-box; }
+        /* Diseño Base - Todo ocupa el 100% de la pantalla */
         body { 
-            background: #121212; 
-            color: #e0e0e0; 
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; 
-            padding: 15px; 
-            margin: 0;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-        }
-        h2 { width: 100%; max-width: 800px; border-bottom: 1px solid #333; padding-bottom: 10px; margin-top: 10px; }
-        #contenedor-videos { width: 100%; max-width: 800px; }
-        
-        .video-card { 
-            background: #1e1e1e; 
-            padding: 15px; 
-            margin-bottom: 20px; 
-            border-radius: 8px; 
-            box-shadow: 0 4px 6px rgba(0,0,0,0.3);
-        }
-        
-        /* Acortar textos largos inteligentemente */
-        .video-card h3 { 
-            margin: 0 0 10px 0; 
-            font-size: 16px; 
-            font-weight: normal;
-            white-space: nowrap; 
-            overflow: hidden; 
-            text-overflow: ellipsis; 
-            color: #bb86fc;
-        }
-        
-        video { 
-            width: 100%; 
-            background: #000; 
-            border-radius: 4px; 
-            display: block;
-        }
-        
-        /* Contenedor del botón para asegurar que siempre sea visible */
-        .boton-contenedor {
-            width: 100%;
-            max-width: 800px;
-            display: flex;
-            justify-content: center;
-            padding: 20px 0 40px 0;
+            margin: 0; padding: 0; 
+            background: #0f0f0f; color: #fff; 
+            font-family: system-ui, -apple-system, sans-serif; 
+            display: flex; flex-direction: column; 
+            height: 100vh; overflow: hidden;
         }
 
-        button { 
-            background: #3700b3; 
-            color: white; 
-            border: none; 
-            padding: 12px 24px; 
-            font-size: 16px; 
-            cursor: pointer; 
-            border-radius: 5px;
-            width: 100%;
-            max-width: 300px;
-            transition: background 0.3s;
+        /* Header Fijo y estético */
+        header { 
+            background: #1a1a1a; 
+            padding: 15px 20px; 
+            box-shadow: 0 2px 10px rgba(0,0,0,0.5); 
+            display: flex; align-items: center; gap: 15px; 
+            flex-shrink: 0;
+            z-index: 10;
+        }
+        .logo-texto { font-size: 1.2rem; font-weight: 600; margin: 0; color: #bb86fc; }
+        .btn-volver { 
+            background: #333; color: white; border: none; 
+            padding: 8px 16px; border-radius: 4px; 
+            cursor: pointer; display: none; font-weight: bold;
+        }
+        .btn-volver:hover { background: #555; }
+
+        /* Contenedor desplazable (Aquí funciona el scroll infinito) */
+        main { 
+            flex-grow: 1; 
+            overflow-y: auto; 
+            padding: 20px; 
+        }
+
+        /* Galería Grid: Casillas dinámicas */
+        .grid-galeria { 
+            display: grid; 
+            grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); 
+            gap: 15px; 
+        }
+
+        /* Tarjetas de Videos / Carpetas */
+        .tarjeta { 
+            background: #222; border-radius: 8px; 
+            overflow: hidden; cursor: pointer; 
+            transition: transform 0.2s; 
+            display: flex; flex-direction: column;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.3);
+        }
+        .tarjeta:hover { transform: translateY(-4px); }
+
+        /* Contenedor de miniatura (16:9) */
+        .miniatura { 
+            width: 100%; aspect-ratio: 16/9; 
+            background: #111; 
+            display: flex; align-items: center; justify-content: center; 
+        }
+        /* El video estático funciona como foto */
+        .miniatura video { 
+            width: 100%; height: 100%; 
+            object-fit: cover; pointer-events: none; 
         }
         
-        button:hover { background: #6200ee; }
-        button:disabled { background: #333; color: #777; cursor: not-allowed; }
+        /* Icono SVG elegante para carpetas */
+        .icono-carpeta { width: 50px; height: 50px; fill: #bb86fc; }
+
+        /* Nombre del archivo acortado */
+        .info { 
+            padding: 12px; font-size: 14px; 
+            white-space: nowrap; overflow: hidden; 
+            text-overflow: ellipsis; text-align: center; color: #ddd;
+        }
+
+        /* Botón de cargar más (ya no se desaparece porque está al fondo del main) */
+        .btn-cargar { 
+            display: block; width: 100%; max-width: 300px; 
+            margin: 30px auto; padding: 12px; 
+            background: #3700b3; color: white; border: none; 
+            border-radius: 6px; font-size: 16px; font-weight: bold; cursor: pointer; 
+        }
+        .btn-cargar:disabled { background: #333; color: #777; cursor: not-allowed; }
+
+        /* Modal / Reproductor de Cine */
+        #modal-cine { 
+            display: none; position: fixed; top: 0; left: 0; 
+            width: 100vw; height: 100vh; 
+            background: rgba(0,0,0,0.95); z-index: 100; 
+            flex-direction: column; align-items: center; justify-content: center; 
+        }
+        #reproductor { width: 90%; max-width: 1000px; max-height: 80vh; border-radius: 8px; background: #000; }
+        .btn-cerrar { 
+            position: absolute; top: 20px; right: 20px; 
+            background: transparent; color: white; border: 2px solid white; 
+            padding: 8px 16px; border-radius: 4px; cursor: pointer; font-weight: bold;
+        }
+        .btn-cerrar:hover { background: white; color: black; }
     </style>
 </head>
 <body>
-    <h2>FastMedia Server</h2>
-    <div id="contenedor-videos"></div>
-    
-    <div class="boton-contenedor">
-        <button id="btn-cargar" onclick="cargarMas()">Cargar más videos</button>
+
+    <header>
+        <button id="btn-volver" class="btn-volver" onclick="irAtras()">← Atrás</button>
+        <div class="logo-texto">FastMedia Gallery</div>
+    </header>
+
+    <main>
+        <div id="grid" class="grid-galeria"></div>
+        <button id="btn-cargar" class="btn-cargar" onclick="cargarContenido()">Cargar más</button>
+    </main>
+
+    <div id="modal-cine">
+        <button class="btn-cerrar" onclick="cerrarCine()">X Cerrar</button>
+        <video id="reproductor" controls preload="metadata"></video>
     </div>
 
     <script>
+        let rutaActual = "";
         let paginaActual = 1;
+        let historialRutas = []; // Para el botón atrás
 
-        async function cargarMas() {
+        const svgCarpeta = `<svg viewBox="0 0 24 24" class="icono-carpeta"><path d="M10 4H4c-1.1 0-1.99.9-1.99 2L2 18c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2h-8l-2-2z"/></svg>`;
+
+        async function cargarContenido(reiniciar = false) {
             const btn = document.getElementById('btn-cargar');
+            if (reiniciar) {
+                paginaActual = 1;
+                document.getElementById('grid').innerHTML = "";
+            }
+            
             btn.innerText = "Cargando...";
             btn.disabled = true;
 
             try {
-                const respuesta = await fetch('/api/videos?page=' + paginaActual);
+                const url = '/api/explorar?dir=' + encodeURIComponent(rutaActual) + '&page=' + paginaActual;
+                const respuesta = await fetch(url);
                 const datos = await respuesta.json();
                 
-                if(datos.videos.length === 0) {
-                    btn.innerText = "No hay más archivos";
+                if(datos.items.length === 0) {
+                    btn.innerText = "Fin del contenido";
                     return;
                 }
 
-                const contenedor = document.getElementById('contenedor-videos');
-                datos.videos.forEach(v => {
+                const grid = document.getElementById('grid');
+                
+                datos.items.forEach(item => {
                     const div = document.createElement('div');
-                    div.className = 'video-card';
-                    div.innerHTML = "<h3>" + v.nombre + "</h3>" +
-                                    "<video controls preload='none'>" +
-                                    "<source src='/stream?id=" + v.id + "' type='video/mp4'>" +
-                                    "</video>";
-                    contenedor.appendChild(div);
+                    div.className = 'tarjeta';
+                    
+                    if (item.tipo === 'carpeta') {
+                        // Tarjeta de Carpeta
+                        div.onclick = () => entrarCarpeta(item.rutaVirtual);
+                        div.innerHTML = `
+                            <div class="miniatura">${svgCarpeta}</div>
+                            <div class="info">${item.nombre}</div>
+                        `;
+                    } else {
+                        // Tarjeta de Video (Miniatura estática)
+                        div.onclick = () => abrirCine('/stream?video=' + encodeURIComponent(item.rutaVirtual));
+                        div.innerHTML = `
+                            <div class="miniatura">
+                                <video src="/stream?video=${encodeURIComponent(item.rutaVirtual)}" preload="metadata"></video>
+                            </div>
+                            <div class="info" title="${item.nombre}">${item.nombre}</div>
+                        `;
+                    }
+                    grid.appendChild(div);
                 });
                 
                 paginaActual++;
-                btn.innerText = "Cargar más videos";
+                btn.innerText = "Cargar más";
                 btn.disabled = false;
+                actualizarBotonAtras();
+
             } catch (err) {
                 btn.innerText = "Error al cargar";
             }
         }
 
-        // Cargar inicial
-        cargarMas();
+        function entrarCarpeta(nuevaRuta) {
+            historialRutas.push(rutaActual);
+            rutaActual = nuevaRuta;
+            cargarContenido(true);
+        }
+
+        function irAtras() {
+            if (historialRutas.length > 0) {
+                rutaActual = historialRutas.pop();
+                cargarContenido(true);
+            }
+        }
+
+        function actualizarBotonAtras() {
+            const btn = document.getElementById('btn-volver');
+            btn.style.display = rutaActual === "" ? "none" : "block";
+        }
+
+        function abrirCine(urlVideo) {
+            const modal = document.getElementById('modal-cine');
+            const reproductor = document.getElementById('reproductor');
+            reproductor.src = urlVideo;
+            modal.style.display = 'flex';
+            reproductor.play();
+        }
+
+        function cerrarCine() {
+            const modal = document.getElementById('modal-cine');
+            const reproductor = document.getElementById('reproductor');
+            reproductor.pause();
+            reproductor.src = "";
+            modal.style.display = 'none';
+        }
+
+        // Carga inicial
+        cargarContenido(true);
     </script>
 </body>
 </html>

@@ -1,62 +1,90 @@
 const fs = require('fs');
 const path = require('path');
 
-let videosDB = [];
-
 function cargarConfiguracion() {
     const configPath = path.join(__dirname, 'config.json');
-    if (!fs.existsSync(configPath)) {
-        console.error("Error: No se encontró config.json");
-        process.exit(1);
-    }
     return JSON.parse(fs.readFileSync(configPath, 'utf-8'));
 }
 
-function escanearVideos(config) {
-    videosDB = [];
-    let idCounter = 1;
+// Convierte la ruta de red (ej. "0/Accion/Pelicula.mp4") a tu ruta local real sin revelarla
+function resolverRuta(config, rutaVirtual) {
+    if (!rutaVirtual) return null;
     
-    config.carpetas_de_videos.forEach(carpeta => {
-        if (fs.existsSync(carpeta)) {
-            const archivos = fs.readdirSync(carpeta);
-            archivos.forEach(archivo => {
-                if (archivo.match(/\.(mp4|mkv|webm)$/i)) {
-                    const rutaAbsoluta = path.join(carpeta, archivo);
-                    const stat = fs.statSync(rutaAbsoluta);
-                    videosDB.push({
-                        id: idCounter++,
-                        nombre: archivo,
-                        rutaAbsoluta: rutaAbsoluta,
-                        fecha: stat.mtimeMs // Guardamos la fecha para ordenar
-                    });
-                }
-            });
-        }
+    const partes = rutaVirtual.split('/');
+    const rootIndex = parseInt(partes[0], 10);
+    
+    if (isNaN(rootIndex) || rootIndex >= config.carpetas_de_videos.length) return null;
+    
+    const rootPath = path.resolve(config.carpetas_de_videos[rootIndex]);
+    const subPath = partes.slice(1).join('/');
+    const rutaFinal = path.resolve(rootPath, subPath);
+    
+    // Filtro de seguridad: Evita que alguien intente retroceder carpetas (Path Traversal)
+    if (!rutaFinal.startsWith(rootPath)) return null;
+    return rutaFinal;
+}
+
+function explorarDirectorio(config, rutaVirtual, pagina, itemsPorPag) {
+    let items = [];
+
+    // Si estamos en la raíz principal, mostrar las carpetas del config.json
+    if (!rutaVirtual) {
+        config.carpetas_de_videos.forEach((carpeta, index) => {
+            const nombre = path.basename(carpeta) || carpeta;
+            items.push({ tipo: 'carpeta', nombre: nombre, rutaVirtual: index.toString() });
+        });
+        return items;
+    }
+
+    const rutaReal = resolverRuta(config, rutaVirtual);
+    if (!rutaReal || !fs.existsSync(rutaReal)) return [];
+
+    const archivos = fs.readdirSync(rutaReal);
+    
+    archivos.forEach(archivo => {
+        const rutaCompleta = path.join(rutaReal, archivo);
+        try {
+            const stat = fs.statSync(rutaCompleta);
+            if (stat.isDirectory()) {
+                items.push({
+                    tipo: 'carpeta',
+                    nombre: archivo,
+                    rutaVirtual: rutaVirtual + '/' + archivo,
+                    fecha: stat.mtimeMs
+                });
+            } else if (archivo.match(/\.(mp4|mkv|webm)$/i)) {
+                items.push({
+                    tipo: 'video',
+                    nombre: archivo,
+                    rutaVirtual: rutaVirtual + '/' + archivo,
+                    fecha: stat.mtimeMs
+                });
+            }
+        } catch (e) { /* Ignorar si hay un archivo protegido por permisos del sistema */ }
     });
 
-    // Ordenar de más reciente a más antiguo
-    videosDB.sort((a, b) => b.fecha - a.fecha);
-    console.log(`Listo: ${videosDB.length} videos indexados y ordenados por fecha.`);
+    // Ordenar: Carpetas primero, luego videos ordenados del más nuevo al más viejo
+    items.sort((a, b) => {
+        if (a.tipo === 'carpeta' && b.tipo === 'video') return -1;
+        if (a.tipo === 'video' && b.tipo === 'carpeta') return 1;
+        if (a.fecha && b.fecha) return b.fecha - a.fecha;
+        return 0;
+    });
+
+    const inicio = (pagina - 1) * itemsPorPag;
+    const fin = inicio + itemsPorPag;
+    return items.slice(inicio, fin);
 }
 
-function obtenerPagina(pagina, itemsPorPagina) {
-    const inicio = (pagina - 1) * itemsPorPagina;
-    const fin = inicio + itemsPorPagina;
-    const videosPaginados = videosDB.slice(inicio, fin);
-    
-    return videosPaginados.map(v => ({ id: v.id, nombre: v.nombre }));
-}
+function hacerStreaming(config, rutaVirtual, req, res) {
+    const videoPath = resolverRuta(config, rutaVirtual);
 
-function hacerStreaming(videoId, req, res) {
-    const videoObj = videosDB.find(v => v.id === videoId);
-
-    if (!videoObj || !fs.existsSync(videoObj.rutaAbsoluta)) {
+    if (!videoPath || !fs.existsSync(videoPath)) {
         res.writeHead(404);
         res.end('No encontrado');
         return;
     }
 
-    const videoPath = videoObj.rutaAbsoluta;
     const stat = fs.statSync(videoPath);
     const fileSize = stat.size;
     const range = req.headers.range;
@@ -64,7 +92,7 @@ function hacerStreaming(videoId, req, res) {
     if (range) {
         const parts = range.replace(/bytes=/, "").split("-");
         const start = parseInt(parts[0], 10);
-        const CHUNK_SIZE = 10 ** 6; // 1MB
+        const CHUNK_SIZE = 10 ** 6; // Fragmentos de 1MB
         const end = parts[1] ? parseInt(parts[1], 10) : Math.min(start + CHUNK_SIZE, fileSize - 1);
         const contentLength = (end - start) + 1;
         
@@ -74,7 +102,6 @@ function hacerStreaming(videoId, req, res) {
             'Content-Length': contentLength,
             'Content-Type': 'video/mp4',
         });
-
         fs.createReadStream(videoPath, { start, end }).pipe(res);
     } else {
         res.writeHead(200, { 'Content-Length': fileSize, 'Content-Type': 'video/mp4' });
@@ -82,9 +109,4 @@ function hacerStreaming(videoId, req, res) {
     }
 }
 
-module.exports = {
-    cargarConfiguracion,
-    escanearVideos,
-    obtenerPagina,
-    hacerStreaming
-};
+module.exports = { cargarConfiguracion, explorarDirectorio, hacerStreaming };
