@@ -93,9 +93,15 @@ function hacerStreaming(config, rutaVirtual, req, res) {
         const parts = range.replace(/bytes=/, "").split("-");
         const start = parseInt(parts[0], 10);
         
-        // 3MB es el punto dulce para dispositivos móviles por Wi-Fi
-        const CHUNK_SIZE = 3 * 1024 * 1024; 
-        const end = parts[1] ? parseInt(parts[1], 10) : Math.min(start + CHUNK_SIZE, fileSize - 1);
+        // ¡CERO LIMITACIONES! Enviamos desde donde pide la tablet hasta el final del archivo.
+        const end = parts[1] ? parseInt(parts[1], 10) : fileSize - 1;
+
+        // Protección extra: Si la tablet pide un rango inválido, le avisamos correctamente.
+        if (start >= fileSize || start > end) {
+            res.writeHead(416, { 'Content-Range': `bytes */${fileSize}` });
+            return res.end();
+        }
+
         const contentLength = (end - start) + 1;
         
         res.writeHead(206, {
@@ -103,19 +109,15 @@ function hacerStreaming(config, rutaVirtual, req, res) {
             'Accept-Ranges': 'bytes',
             'Content-Length': contentLength,
             'Content-Type': 'video/mp4',
+            'Connection': 'keep-alive' // Esto le ruega a la tablet que no cierre la conexión
         });
         
-        // highWaterMark: Lee de a 1MB del almacenamiento del celular, sin estresar el hardware
-        const stream = fs.createReadStream(videoPath, { 
-            start, 
-            end, 
-            highWaterMark: 1024 * 1024 
-        });
-        
+        // Sin highWaterMark: dejamos que Node.js use sus fragmentos ágiles de 64kb nativos.
+        const stream = fs.createReadStream(videoPath, { start, end });
         stream.pipe(res);
 
-        // ¡EL TRUCO SALVAVIDAS! Si el usuario adelanta el video, la tablet corta la conexión.
-        // Aquí matamos el stream para que el teléfono deje de leer el disco inútilmente.
+        // LA BALA DE PLATA: Si la tablet cancela porque "adelantaste" el video,
+        // matamos el proceso de lectura inmediatamente para que Termux no se asfixie.
         req.on('close', () => {
             if (!stream.destroyed) {
                 stream.destroy();
@@ -123,8 +125,12 @@ function hacerStreaming(config, rutaVirtual, req, res) {
         });
 
     } else {
-        res.writeHead(200, { 'Content-Length': fileSize, 'Content-Type': 'video/mp4' });
-        const stream = fs.createReadStream(videoPath, { highWaterMark: 1024 * 1024 });
+        res.writeHead(200, { 
+            'Content-Length': fileSize, 
+            'Content-Type': 'video/mp4',
+            'Connection': 'keep-alive'
+        });
+        const stream = fs.createReadStream(videoPath);
         stream.pipe(res);
 
         req.on('close', () => {
