@@ -92,8 +92,9 @@ function hacerStreaming(config, rutaVirtual, req, res) {
     if (range) {
         const parts = range.replace(/bytes=/, "").split("-");
         const start = parseInt(parts[0], 10);
-        const CHUNK_SIZE = 10 ** 6; // Fragmentos de 1MB
-        const end = parts[1] ? parseInt(parts[1], 10) : Math.min(start + CHUNK_SIZE, fileSize - 1);
+        // Ya NO limitamos a 1MB. Si el navegador no especifica fin, enviamos hasta el final.
+        // Esto reduce drásticamente las peticiones HTTP y acelera la carga en Wi-Fi.
+        const end = parts[1] ? parseInt(parts[1], 10) : fileSize - 1;
         const contentLength = (end - start) + 1;
         
         res.writeHead(206, {
@@ -102,6 +103,7 @@ function hacerStreaming(config, rutaVirtual, req, res) {
             'Content-Length': contentLength,
             'Content-Type': 'video/mp4',
         });
+        // fs.createReadStream ya gestiona la RAM en fragmentos de 64kb internamente. Es seguro.
         fs.createReadStream(videoPath, { start, end }).pipe(res);
     } else {
         res.writeHead(200, { 'Content-Length': fileSize, 'Content-Type': 'video/mp4' });

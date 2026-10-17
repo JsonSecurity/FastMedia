@@ -120,11 +120,14 @@
     </div>
 
     <script>
-        let rutaActual = "";
+let rutaActual = "";
         let paginaActual = 1;
-        let historialRutas = []; // Para el botón atrás
+        let historialRutas = [];
 
         const svgCarpeta = `<svg viewBox="0 0 24 24" class="icono-carpeta"><path d="M10 4H4c-1.1 0-1.99.9-1.99 2L2 18c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2h-8l-2-2z"/></svg>`;
+        
+        // Nuevo icono para los videos en lugar de cargar la miniatura real
+        const svgVideo = `<svg viewBox="0 0 24 24" class="icono-carpeta" style="fill:#03dac6;"><path d="M17 10.5V7c0-.55-.45-1-1-1H4c-.55 0-1 .45-1 1v10c0 .55.45 1 1 1h12c.55 0 1-.45 1-1v-3.5l4 4v-11l-4 4z"/></svg>`;
 
         async function cargarContenido(reiniciar = false) {
             const btn = document.getElementById('btn-cargar');
@@ -153,19 +156,16 @@
                     div.className = 'tarjeta';
                     
                     if (item.tipo === 'carpeta') {
-                        // Tarjeta de Carpeta
                         div.onclick = () => entrarCarpeta(item.rutaVirtual);
                         div.innerHTML = `
                             <div class="miniatura">${svgCarpeta}</div>
                             <div class="info">${item.nombre}</div>
                         `;
                     } else {
-                        // Tarjeta de Video (Miniatura estática)
+                        // AQUÍ ESTÁ EL CAMBIO: Ya no usamos <video preload>, solo mostramos el ícono SVG
                         div.onclick = () => abrirCine('/stream?video=' + encodeURIComponent(item.rutaVirtual));
                         div.innerHTML = `
-                            <div class="miniatura">
-                                <video src="/stream?video=${encodeURIComponent(item.rutaVirtual)}" preload="metadata"></video>
-                            </div>
+                            <div class="miniatura">${svgVideo}</div>
                             <div class="info" title="${item.nombre}">${item.nombre}</div>
                         `;
                     }
@@ -181,6 +181,7 @@
                 btn.innerText = "Error al cargar";
             }
         }
+// (El resto de las funciones irAtras, abrirCine, etc. se mantienen igual)
 
         function entrarCarpeta(nuevaRuta) {
             historialRutas.push(rutaActual);
